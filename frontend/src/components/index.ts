@@ -3,6 +3,12 @@ export { DashboardLayout } from './layout/DashboardLayout';
 export { TopBar } from './layout/TopBar';
 export { Sidebar } from './layout/Sidebar';
 
+// Dashboard Components
+export { StatisticCard } from './dashboard/StatisticCard';
+export { RecentActivities } from './dashboard/RecentActivities';
+export { DepartmentStats } from './dashboard/DepartmentStats';
+export { QuickActions } from './dashboard/QuickActions';
+
 // Shared Components
 export { ConfirmDialog } from './shared/ConfirmDialog';
 export { FileUpload } from './shared/FileUpload';

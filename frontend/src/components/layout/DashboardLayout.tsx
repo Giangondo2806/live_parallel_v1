@@ -34,7 +34,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <Box className="flex min-h-screen bg-background">
+    <Box className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <Sidebar 
         open={sidebarOpen}
@@ -44,7 +44,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main Layout Container */}
       <Box 
-        className="flex-1 flex flex-col min-w-0"
+        className="flex-1 flex flex-col min-w-0 h-full"
       >
         {/* Top Bar - now positioned relative to main content */}
         <TopBar 
@@ -57,7 +57,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Main Content */}
         <Box 
           component="main" 
-          className="flex-1 overflow-auto p-3 lg:p-5"
+          className="flex-1 overflow-y-auto overflow-x-hidden p-3 lg:p-5 dashboard-content"
+          sx={{
+            height: 'calc(100vh - 72px)', // Subtract AppBar height (64px + padding)
+            maxHeight: 'calc(100vh - 72px)',
+          }}
         >
           {children}
         </Box>
