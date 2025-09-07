@@ -1,0 +1,51 @@
+export const departments = [
+  {
+    id: 1,
+    name: 'IT Development',
+    code: 'IT-DEV',
+    description: 'Software Development Department',
+    isActive: true,
+  },
+  {
+    id: 2,
+    name: 'IT Infrastructure',
+    code: 'IT-INF',
+    description: 'Infrastructure and Operations',
+    isActive: true,
+  },
+  {
+    id: 3,
+    name: 'Quality Assurance',
+    code: 'QA',
+    description: 'Quality Assurance and Testing',
+    isActive: true,
+  },
+  {
+    id: 4,
+    name: 'Business Analysis',
+    code: 'BA',
+    description: 'Business Analysis Department',
+    isActive: true,
+  },
+  {
+    id: 5,
+    name: 'Project Management',
+    code: 'PM',
+    description: 'Project Management Office',
+    isActive: true,
+  },
+  {
+    id: 6,
+    name: 'Human Resources',
+    code: 'HR',
+    description: 'Human Resources Department',
+    isActive: true,
+  },
+  {
+    id: 7,
+    name: 'Finance',
+    code: 'FIN',
+    description: 'Finance and Accounting',
+    isActive: true,
+  },
+];
