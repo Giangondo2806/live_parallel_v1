@@ -14,16 +14,68 @@ export const formatCurrency = (amount: number): string => {
   if (!amount) return '';
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'VND',
   }).format(amount);
 };
 
+/**
+ * Format file size from bytes to human readable format
+ */
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
+  
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+/**
+ * Get role display name in Vietnamese
+ */
+export const getRoleDisplayName = (role: string): string => {
+  const roleNames: Record<string, string> = {
+    admin: 'Quản trị viên',
+    ra_all: 'RA Toàn bộ',
+    ra_department: 'RA Phòng ban', 
+    manager: 'Quản lý',
+    viewer: 'Người xem',
+  };
+  
+  return roleNames[role] || role;
+};
+
+/**
+ * Get status color for Material-UI components
+ */
+export const getStatusColor = (status: string): 'success' | 'warning' | 'error' | 'info' | 'default' => {
+  switch (status.toLowerCase()) {
+    case 'active':
+    case 'completed':
+    case 'approved':
+      return 'success';
+    case 'pending':
+    case 'waiting':
+      return 'warning';
+    case 'inactive':
+    case 'rejected':
+    case 'error':
+      return 'error';
+    case 'processing':
+    case 'in_progress':
+      return 'info';
+    default:
+      return 'default';
+  }
+};
+
+/**
+ * Truncate text with ellipsis
+ */
+export const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '...';
 };
 
 export const getFileExtension = (filename: string): string => {
@@ -81,16 +133,6 @@ export const validateEmail = (email: string): boolean => {
 export const validateEmployeeCode = (code: string): boolean => {
   const codeRegex = /^[A-Z]{2,4}\d{3,6}$/;
   return codeRegex.test(code);
-};
-
-export const getStatusColor = (status: string): string => {
-  const colors = {
-    idle: '#FFC107',
-    assigned: '#28A745',
-    processing: '#17A2B8',
-    unavailable: '#DC3545',
-  };
-  return colors[status as keyof typeof colors] || '#6C757D';
 };
 
 export const getStatusText = (status: string): string => {
