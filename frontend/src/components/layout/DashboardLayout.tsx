@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Box, Toolbar } from '@mui/material';
+import { Box } from '@mui/material';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { useRouter } from 'next/navigation';
@@ -35,13 +35,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <Box className="flex min-h-screen bg-background">
-      {/* Top Bar */}
-      <TopBar 
-        onMenuClick={handleSidebarToggle}
-        user={user}
-        onLogout={handleLogout}
-      />
-
       {/* Sidebar */}
       <Sidebar 
         open={sidebarOpen}
@@ -49,18 +42,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         user={user}
       />
 
-      {/* Main Content */}
+      {/* Main Layout Container */}
       <Box 
-        component="main" 
-        className={`
-          flex-1 transition-all duration-300 ease-in-out
-          ${sidebarOpen ? 'lg:ml-[280px]' : 'lg:ml-0'}
-        `}
-        sx={{
-          paddingTop: '64px', // TopBar height
-        }}
+        className="flex-1 flex flex-col min-w-0"
       >
-        <Box className="p-6">
+        {/* Top Bar - now positioned relative to main content */}
+        <TopBar 
+          onMenuClick={handleSidebarToggle}
+          user={user}
+          onLogout={handleLogout}
+          sidebarOpen={sidebarOpen}
+        />
+
+        {/* Main Content */}
+        <Box 
+          component="main" 
+          className="flex-1 overflow-auto p-3 lg:p-5"
+        >
           {children}
         </Box>
       </Box>

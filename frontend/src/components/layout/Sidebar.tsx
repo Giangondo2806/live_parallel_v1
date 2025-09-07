@@ -111,12 +111,28 @@ const menuItems: MenuItem[] = [
   },
 ];
 
-const DRAWER_WIDTH = 280;
+const DRAWER_WIDTH = 270;
 
 export function Sidebar({ open, onClose, user }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [expandedItems, setExpandedItems] = React.useState<string[]>(['resources']);
+  const [expandedItems, setExpandedItems] = React.useState<string[]>([]);
+
+  // Auto-expand parent menu if current page is a child
+  React.useEffect(() => {
+    const currentExpandedItems: string[] = [];
+    
+    menuItems.forEach(item => {
+      if (item.children) {
+        const hasActiveChild = item.children.some(child => pathname === child.path);
+        if (hasActiveChild) {
+          currentExpandedItems.push(item.id);
+        }
+      }
+    });
+    
+    setExpandedItems(currentExpandedItems);
+  }, [pathname]);
 
   const handleItemClick = (item: MenuItem) => {
     if (item.path) {
@@ -194,15 +210,17 @@ export function Sidebar({ open, onClose, user }: SidebarProps) {
   };
 
   const drawerContent = (
-    <Box className="h-full bg-white">
-      {/* Logo Section */}
-      <Box className="p-6 border-b border-gray-200">
-        <Typography variant="h5" className="font-bold text-gray-800 mb-1">
-          IRMS
-        </Typography>
-        <Typography variant="body2" className="text-gray-600">
-          Idle Resource Management
-        </Typography>
+    <Box className="h-full bg-white flex flex-col">
+      {/* Logo Section - Now matches TopBar height */}
+      <Box className="p-6 border-b border-gray-200 min-h-[64px] flex items-center">
+        <Box>
+          <Typography variant="h5" className="font-bold text-gray-800 mb-1">
+            IRMS
+          </Typography>
+          <Typography variant="body2" className="text-gray-600">
+            Idle Resource Management
+          </Typography>
+        </Box>
       </Box>
 
       {/* Navigation Menu */}
@@ -236,8 +254,10 @@ export function Sidebar({ open, onClose, user }: SidebarProps) {
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: DRAWER_WIDTH,
-            top: 64, // Height of TopBar
-            height: 'calc(100vh - 64px)',
+            top: 0,
+            height: '100vh',
+            zIndex: (theme) => theme.zIndex.drawer + 2,
+            borderRadius: 0,
           },
         }}
       >
@@ -255,11 +275,12 @@ export function Sidebar({ open, onClose, user }: SidebarProps) {
           '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
             boxSizing: 'border-box',
-            position: 'fixed',
-            top: 64, // Height of TopBar
-            height: 'calc(100vh - 64px)',
+            position: 'relative',
+            top: 0,
+            height: '100vh',
             transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1) 0ms',
             zIndex: (theme) => theme.zIndex.drawer,
+            borderRadius: 0,
           },
         }}
       >

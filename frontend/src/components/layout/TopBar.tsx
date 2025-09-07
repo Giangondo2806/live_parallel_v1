@@ -29,9 +29,10 @@ interface TopBarProps {
     email?: string;
   };
   onLogout?: () => void;
+  sidebarOpen?: boolean;
 }
 
-export function TopBar({ onMenuClick, user, onLogout }: TopBarProps) {
+export function TopBar({ onMenuClick, user, onLogout, sidebarOpen }: TopBarProps) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -49,10 +50,14 @@ export function TopBar({ onMenuClick, user, onLogout }: TopBarProps) {
 
   return (
     <AppBar 
-      position="fixed" 
+      position="sticky" 
       className="bg-white shadow-sm border-b border-gray-200"
       elevation={0}
-      sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}
+      sx={{ 
+        zIndex: (theme) => theme.zIndex.drawer - 1,
+        top: 0,
+        borderRadius: 0,
+      }}
     >
       <Toolbar className="px-6">
         <IconButton
@@ -113,6 +118,13 @@ export function TopBar({ onMenuClick, user, onLogout }: TopBarProps) {
             horizontal: 'right',
           }}
           className="mt-2"
+          slotProps={{
+            paper: {
+              sx: {
+                borderRadius: 0,
+              }
+            }
+          }}
         >
           <MenuItem onClick={handleMenuClose} className="min-w-48">
             <AccountCircle className="mr-3 text-gray-600" />
