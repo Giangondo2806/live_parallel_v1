@@ -116,3 +116,96 @@ export interface DashboardData {
   }>;
   recentUpdates: IdleResource[];
 }
+
+// Idle Resource API Types
+export interface CreateIdleResourceRequest {
+  employeeCode: string;
+  fullName: string;
+  departmentId: number;
+  position: string;
+  email?: string;
+  skillSet?: string;
+  idleFrom: string;
+  idleTo?: string;
+  status: ResourceStatus;
+  processNote?: string;
+  rate?: number;
+}
+
+export interface UpdateIdleResourceRequest extends Partial<CreateIdleResourceRequest> {
+  updatedBy?: number;
+}
+
+export interface SearchCriteriaRequest {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  departmentId?: number;
+  status?: ResourceStatus;
+  idleFromStart?: string;
+  idleFromEnd?: string;
+  urgent?: boolean;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+}
+
+export interface IdleResourceResponse {
+  id: number;
+  employeeCode: string;
+  fullName: string;
+  departmentId: number;
+  department: {
+    id: number;
+    name: string;
+    code: string;
+  };
+  position: string;
+  email?: string;
+  skillSet?: string;
+  idleFrom: Date;
+  idleTo?: Date;
+  status: ResourceStatus;
+  processNote?: string;
+  rate?: number;
+  isUrgent: boolean;
+  cvFilesCount: number;
+  createdBy: number;
+  updatedBy: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PaginatedIdleResourceResponse {
+  data: IdleResourceResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface BulkDeleteRequest {
+  ids: number[];
+}
+
+export interface ImportResult {
+  successCount: number;
+  errorCount: number;
+  errors: string[];
+  totalProcessed: number;
+}
+
+export interface ExportFilter {
+  departmentIds?: number[];
+  status?: string;
+  urgentOnly?: boolean;
+}
+
+// Search filters for UI
+export interface ResourceSearchFilters {
+  search: string;
+  departmentId: string;
+  status: string;
+  urgentOnly: boolean;
+}
