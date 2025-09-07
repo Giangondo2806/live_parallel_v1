@@ -236,6 +236,8 @@ export function Sidebar({ open, onClose, user }: SidebarProps) {
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: DRAWER_WIDTH,
+            top: 64, // Height of TopBar
+            height: 'calc(100vh - 64px)',
           },
         }}
       >
@@ -253,8 +255,11 @@ export function Sidebar({ open, onClose, user }: SidebarProps) {
           '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
             boxSizing: 'border-box',
-            position: 'relative',
+            position: 'fixed',
+            top: 64, // Height of TopBar
+            height: 'calc(100vh - 64px)',
             transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1) 0ms',
+            zIndex: (theme) => theme.zIndex.drawer,
           },
         }}
       >
