@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -34,29 +34,12 @@ import {
 import { DataGrid, DataGridColumn } from '../../components/shared/DataGrid';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
-import { IdleResourceResponse, ResourceSearchFilters, ResourceStatus } from '../../lib/types';
-
-// Interface for mock data (matching IdleResourceResponse but with string dates for simplicity)
-interface MockIdleResource {
-  id: number;
-  employeeCode: string;
-  fullName: string;
-  department: {
-    id: number;
-    name: string;
-    code: string;
-  };
-  position: string;
-  email: string;
-  skillSet: string;
-  idleFrom: string;
-  idleTo: string | null;
-  status: string;
-  rate: number;
-  isUrgent: boolean;
-  cvFilesCount: number;
-  updatedAt: string;
-}
+import { 
+  idleResourcesService, 
+  IdleResourceData, 
+  PaginatedIdleResourceResponse,
+  ResourceSearchParams
+} from '../../lib/services/idle-resources.service';
 
 interface MockDepartment {
   id: number;
@@ -69,94 +52,11 @@ interface StatusOption {
   label: string;
 }
 
-// Mock data for UI display
-const MOCK_IDLE_RESOURCES: MockIdleResource[] = [
-  {
-    id: 1,
-    employeeCode: 'EMP001',
-    fullName: 'Nguyen Van A',
-    department: { id: 1, name: 'IT Department', code: 'IT' },
-    position: 'Java Developer',
-    email: 'nguyenvana@company.com',
-    skillSet: 'Java, Spring Boot, MySQL',
-    idleFrom: '2024-01-15',
-    idleTo: null,
-    status: 'idle',
-    rate: 5000,
-    isUrgent: true,
-    cvFilesCount: 1,
-    updatedAt: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: 2,
-    employeeCode: 'EMP002',
-    fullName: 'Tran Thi B',
-    department: { id: 2, name: 'QA Department', code: 'QA' },
-    position: 'Test Engineer',
-    email: 'tranthib@company.com',
-    skillSet: 'Manual Testing, Automation',
-    idleFrom: '2024-02-20',
-    idleTo: null,
-    status: 'idle',
-    rate: 4000,
-    isUrgent: false,
-    cvFilesCount: 1,
-    updatedAt: '2024-02-20T14:20:00Z'
-  },
-  {
-    id: 3,
-    employeeCode: 'EMP003',
-    fullName: 'Le Van C',
-    department: { id: 1, name: 'IT Department', code: 'IT' },
-    position: 'Frontend Developer',
-    email: 'levanc@company.com',
-    skillSet: 'React, TypeScript, Material-UI',
-    idleFrom: '2024-03-10',
-    idleTo: null,
-    status: 'idle',
-    rate: 4500,
-    isUrgent: false,
-    cvFilesCount: 0,
-    updatedAt: '2024-03-10T09:15:00Z'
-  },
-  {
-    id: 4,
-    employeeCode: 'EMP004',
-    fullName: 'Pham Thi D',
-    department: { id: 3, name: 'Marketing', code: 'MKT' },
-    position: 'Digital Marketing',
-    email: 'phamthid@company.com',
-    skillSet: 'SEO, Google Ads, Social Media',
-    idleFrom: '2023-11-05',
-    idleTo: null,
-    status: 'idle',
-    rate: 3500,
-    isUrgent: true,
-    cvFilesCount: 1,
-    updatedAt: '2023-11-05T16:45:00Z'
-  },
-  {
-    id: 5,
-    employeeCode: 'EMP005',
-    fullName: 'Hoang Van E',
-    department: { id: 1, name: 'IT Department', code: 'IT' },
-    position: 'Business Analyst',
-    email: 'hoangvane@company.com',
-    skillSet: 'Requirements Analysis, Documentation',
-    idleFrom: '2024-01-25',
-    idleTo: null,
-    status: 'processing',
-    rate: 4200,
-    isUrgent: false,
-    cvFilesCount: 1,
-    updatedAt: '2024-01-25T11:30:00Z'
-  }
-];
-
+// Mock data for departments (will be loaded from API later)
 const MOCK_DEPARTMENTS: MockDepartment[] = [
   { id: 1, name: 'IT Department', code: 'IT' },
   { id: 2, name: 'QA Department', code: 'QA' },
-  { id: 3, name: 'Marketing', code: 'MKT' },
+  { id: 3, name: 'Design', code: 'DES' },
   { id: 4, name: 'HR Department', code: 'HR' },
   { id: 5, name: 'Finance', code: 'FIN' }
 ];
@@ -171,14 +71,27 @@ const STATUS_OPTIONS: StatusOption[] = [
 
 export default function IdleResourceListPage() {
   // State management
-  const [resources, setResources] = useState<MockIdleResource[]>(MOCK_IDLE_RESOURCES);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [resources, setResources] = useState<IdleResourceData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
-  const [searchFilters, setSearchFilters] = useState<ResourceSearchFilters>({
+  
+  // Pagination state
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
+  const [total, setTotal] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  
+  // Search filters
+  const [searchFilters, setSearchFilters] = useState<ResourceSearchParams>({
     search: '',
-    departmentId: 'all',
-    status: 'all',
-    urgentOnly: false
+    departmentId: undefined,
+    status: undefined,
+    urgent: false,
+    page: 1,
+    pageSize: 20,
+    sortBy: 'updatedAt',
+    sortOrder: 'DESC'
   });
 
   // Dialog states
@@ -186,7 +99,7 @@ export default function IdleResourceListPage() {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState<boolean>(false);
 
   // Data Grid columns definition
-  const columns: DataGridColumn<MockIdleResource>[] = [
+  const columns: DataGridColumn<IdleResourceData>[] = [
     {
       id: 'employeeCode',
       label: 'Employee Code',
@@ -198,7 +111,7 @@ export default function IdleResourceListPage() {
       label: 'Full Name',
       minWidth: 180,
       sortable: true,
-      render: (value: string, row: MockIdleResource) => (
+      render: (value: string, row: IdleResourceData) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {row.isUrgent && (
             <Tooltip title="Idle for more than 2 months">
@@ -214,7 +127,7 @@ export default function IdleResourceListPage() {
       label: 'Department',
       minWidth: 130,
       sortable: true,
-      render: (value: MockIdleResource['department']) => value?.name || '-'
+      render: (value: IdleResourceData['department']) => value?.name || '-'
     },
     {
       id: 'position',
@@ -287,288 +200,325 @@ export default function IdleResourceListPage() {
     }
   ];
 
-  // Event handlers - All with TODO comments for business logic implementation
+  // Load resources from API
+  const loadResourceList = useCallback(async (searchParams: ResourceSearchParams = {}) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {
+        ...searchFilters,
+        ...searchParams,
+        page,
+        pageSize
+      };
+
+      const response = await idleResourcesService.getIdleResources(params);
+      
+      setResources(response.data);
+      setTotal(response.total);
+      setTotalPages(response.totalPages);
+      setPage(response.page);
+      setPageSize(response.pageSize);
+      
+    } catch (err) {
+      console.error('Failed to load resources:', err);
+      setError('Failed to load idle resources. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchFilters, page, pageSize]);
+
+  // Initial data load
+  useEffect(() => {
+    loadResourceList();
+  }, [loadResourceList]);
+
+  // Event handlers
   const handleSearch = useCallback(() => {
-    // TODO: Implement API call to search resources with current filters
-    // TODO: Add debouncing for search input
-    // TODO: Handle search errors and show user feedback
-    // TODO: Update URL parameters for shareable search results
-    console.log('Search filters:', searchFilters);
-  }, [searchFilters]);
+    setPage(1);
+    loadResourceList();
+  }, [loadResourceList]);
 
   const handleReset = useCallback(() => {
-    // TODO: Reset all filters and reload original data
-    // TODO: Clear URL parameters
     setSearchFilters({
       search: '',
-      departmentId: 'all',
-      status: 'all',
-      urgentOnly: false
+      departmentId: undefined,
+      status: undefined,
+      urgent: false,
+      page: 1,
+      pageSize: 20,
+      sortBy: 'updatedAt',
+      sortOrder: 'DESC'
     });
-  }, []);
+    setPage(1);
+    loadResourceList();
+  }, [loadResourceList]);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    setPage(newPage);
+    loadResourceList();
+  }, [loadResourceList]);
+
+  const handleSort = useCallback((column: string, direction: 'ASC' | 'DESC') => {
+    setSearchFilters(prev => ({
+      ...prev,
+      sortBy: column,
+      sortOrder: direction
+    }));
+    loadResourceList();
+  }, [loadResourceList]);
+
+  const handleRefresh = useCallback(() => {
+    loadResourceList();
+  }, [loadResourceList]);
 
   const handleAddNew = useCallback(() => {
-    // TODO: Navigate to resource detail page in create mode
-    // TODO: Check user permissions for creating resources
-    console.log('Navigate to create new resource');
+    // TODO: Navigate to add new resource form
+    console.log('Navigate to add new resource');
   }, []);
 
-  const handleEdit = useCallback((id: number) => {
-    // TODO: Navigate to resource detail page in edit mode
-    // TODO: Check user permissions for editing this resource
-    console.log('Edit resource:', id);
-  }, []);
-
-  const handleDelete = useCallback((id: number) => {
-    // TODO: Check user permissions for deleting this resource
-    // TODO: Check for dependencies (CV files, history)
+  const handleDelete = useCallback(() => {
+    // TODO: Implement delete confirmation and API call
     setDeleteDialogOpen(true);
-    console.log('Delete resource:', id);
   }, []);
 
   const handleBulkDelete = useCallback(() => {
-    // TODO: Check user permissions for each selected resource
-    // TODO: Validate bulk deletion constraints
-    if (selectedRows.length === 0) return;
+    // TODO: Implement bulk delete confirmation and API call
     setBulkDeleteDialogOpen(true);
-  }, [selectedRows]);
-
-  const handleImport = useCallback(() => {
-    // TODO: Open file picker for Excel import
-    // TODO: Validate file format and size
-    // TODO: Show import progress dialog
-    // TODO: Handle import results and errors
-    console.log('Import Excel file');
   }, []);
 
   const handleExport = useCallback(() => {
-    // TODO: Apply current filters to export
-    // TODO: Generate Excel file with filtered data
-    // TODO: Download file with proper filename
-    // TODO: Show export progress for large datasets
-    console.log('Export to Excel with filters:', searchFilters);
-  }, [searchFilters]);
-
-  const handleColumnSettings = useCallback(() => {
-    // TODO: Open column visibility/ordering dialog
-    // TODO: Save user preferences for column layout
-    console.log('Open column settings');
+    // TODO: Implement Excel export functionality
+    console.log('Export resources to Excel');
   }, []);
 
-  const confirmDelete = useCallback(() => {
-    // TODO: Implement actual delete API call
-    // TODO: Show success/error message
-    // TODO: Refresh data grid
-    setDeleteDialogOpen(false);
-    console.log('Confirmed delete');
+  const handleImport = useCallback(() => {
+    // TODO: Implement Excel import functionality
+    console.log('Import resources from Excel');
   }, []);
 
-  const confirmBulkDelete = useCallback(() => {
-    // TODO: Implement bulk delete API call
-    // TODO: Handle partial failures
-    // TODO: Show detailed results
-    // TODO: Refresh data grid
-    setBulkDeleteDialogOpen(false);
-    setSelectedRows([]);
-    console.log('Confirmed bulk delete:', selectedRows);
-  }, [selectedRows]);
+  const handleRowSelect = useCallback((rowId: number) => {
+    setSelectedRows(prev => 
+      prev.includes(rowId) 
+        ? prev.filter(id => id !== rowId)
+        : [...prev, rowId]
+    );
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedRows.length === resources.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(resources.map(r => r.id));
+    }
+  }, [selectedRows.length, resources]);
 
   return (
     <DashboardLayout>
       <Box sx={{ p: 3 }}>
-        {/* Page Header */}
-        <Typography variant="h4" gutterBottom>
-          Idle Resource Management
-        </Typography>
+        <Card>
+          <CardHeader
+            title="Idle Resource Management"
+            action={
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<ImportIcon />}
+                  onClick={handleImport}
+                  size="small"
+                >
+                  Import
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<ExportIcon />}
+                  onClick={handleExport}
+                  size="small"
+                >
+                  Export
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddNew}
+                  size="small"
+                >
+                  Add New
+                </Button>
+              </Stack>
+            }
+          />
+          
+          <CardContent>
+            {/* Search and Filter Section */}
+            <Stack spacing={2} sx={{ mb: 3 }}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <TextField
+                  label="Search..."
+                  placeholder="Search by name, employee code, or skills"
+                  value={searchFilters.search || ''}
+                  onChange={(e) => setSearchFilters(prev => ({ ...prev, search: e.target.value }))}
+                  sx={{ minWidth: 300 }}
+                  size="small"
+                />
+                
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Department</InputLabel>
+                  <Select
+                    value={searchFilters.departmentId || 'all'}
+                    onChange={(e) => setSearchFilters(prev => ({ 
+                      ...prev, 
+                      departmentId: e.target.value === 'all' ? undefined : Number(e.target.value)
+                    }))}
+                    label="Department"
+                  >
+                    <MenuItem value="all">All Departments</MenuItem>
+                    {MOCK_DEPARTMENTS.map((dept) => (
+                      <MenuItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-      {/* Search and Filter Section */}
-      <Card sx={{ mb: 3 }}>
-        <CardHeader title="Search & Filters" />
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <TextField
-              label="Search"
-              placeholder="Search by name, code, or skills..."
-              value={searchFilters.search}
-              onChange={(e) => setSearchFilters(prev => ({ ...prev, search: e.target.value }))}
-              sx={{ minWidth: 300 }}
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              }}
-            />
+                <FormControl size="small" sx={{ minWidth: 130 }}>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={searchFilters.status || 'all'}
+                    onChange={(e) => setSearchFilters(prev => ({ 
+                      ...prev, 
+                      status: e.target.value === 'all' ? undefined : e.target.value 
+                    }))}
+                    label="Status"
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-            <FormControl sx={{ minWidth: 150 }}>
-              <InputLabel>Department</InputLabel>
-              <Select
-                value={searchFilters.departmentId}
-                label="Department"
-                onChange={(e) => setSearchFilters(prev => ({ ...prev, departmentId: e.target.value }))}
-              >
-                <MenuItem value="all">All Departments</MenuItem>
-                {MOCK_DEPARTMENTS.map(dept => (
-                  <MenuItem key={dept.id} value={dept.id.toString()}>
-                    {dept.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                <Button
+                  variant="contained"
+                  startIcon={<SearchIcon />}
+                  onClick={handleSearch}
+                  disabled={loading}
+                >
+                  Search
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={handleReset}
+                  disabled={loading}
+                >
+                  Reset
+                </Button>
+                
+                <IconButton onClick={handleRefresh} disabled={loading}>
+                  <RefreshIcon />
+                </IconButton>
+              </Stack>
+            </Stack>
 
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={searchFilters.status}
-                label="Status"
-                onChange={(e) => setSearchFilters(prev => ({ ...prev, status: e.target.value }))}
-              >
-                {STATUS_OPTIONS.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            {/* Error Display */}
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
 
-            <Button
-              variant="contained"
-              startIcon={<SearchIcon />}
-              onClick={handleSearch}
-              disabled={loading}
-            >
-              Search
-            </Button>
+            {/* Action Buttons */}
+            {selectedRows.length > 0 && (
+              <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleBulkDelete}
+                  disabled={loading}
+                >
+                  Delete Selected ({selectedRows.length})
+                </Button>
+              </Stack>
+            )}
 
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={handleReset}
-              disabled={loading}
-            >
-              Reset
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAddNew}
-              color="primary"
-            >
-              Add New Resource
-            </Button>
-
-            <Button
-              variant="outlined"
-              startIcon={<DeleteIcon />}
-              onClick={handleBulkDelete}
-              disabled={selectedRows.length === 0}
-              color="error"
-            >
-              Delete Selected ({selectedRows.length})
-            </Button>
-
-            <Button
-              variant="outlined"
-              startIcon={<ImportIcon />}
-              onClick={handleImport}
-            >
-              Import Excel
-            </Button>
-
-            <Button
-              variant="outlined"
-              startIcon={<ExportIcon />}
-              onClick={handleExport}
-            >
-              Export Data
-            </Button>
-
-            <IconButton onClick={handleColumnSettings} title="Column Settings">
-              <SettingsIcon />
-            </IconButton>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Data Grid */}
-      <Card>
-        <CardContent>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-              <CircularProgress />
+            {/* Data Grid */}
+            <Box sx={{ position: 'relative', minHeight: loading ? 200 : 'auto' }}>
+              {loading && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 1
+                  }}
+                >
+                  <CircularProgress />
+                </Box>
+              )}
+              
+              <DataGrid
+                columns={columns}
+                rows={resources}
+                loading={loading}
+                selection={{
+                  selected: selectedRows.map(String),
+                  onSelectionChange: (selected: string[]) => setSelectedRows(selected.map(Number)),
+                  getRowId: (row: IdleResourceData) => String(row.id)
+                }}
+                sorting={{
+                  field: searchFilters.sortBy as keyof IdleResourceData,
+                  direction: searchFilters.sortOrder === 'ASC' ? 'asc' : 'desc',
+                  onSort: (field: keyof IdleResourceData) => {
+                    const direction = searchFilters.sortOrder === 'ASC' ? 'DESC' : 'ASC';
+                    handleSort(String(field), direction);
+                  }
+                }}
+                pagination={{
+                  page: page - 1, // DataGrid expects 0-based page
+                  rowsPerPage: pageSize,
+                  total,
+                  onPageChange: (newPage: number) => handlePageChange(newPage + 1), // Convert back to 1-based
+                  onRowsPerPageChange: (newPageSize: number) => {
+                    setPageSize(newPageSize);
+                    setPage(1);
+                    loadResourceList();
+                  }
+                }}
+              />
             </Box>
-          ) : (
-            <DataGrid<MockIdleResource>
-              columns={columns}
-              rows={resources}
-              loading={loading}
-              title="Idle Resources"
-              subtitle={`${resources.length} resources found`}
-              selection={{
-                selected: selectedRows.map(String),
-                onSelectionChange: (selected: string[]) => setSelectedRows(selected.map(Number)),
-                getRowId: (row: MockIdleResource) => String(row.id)
-              }}
-              actions={{
-                onEdit: (row: MockIdleResource) => handleEdit(row.id),
-                onDelete: (row: MockIdleResource) => handleDelete(row.id),
-                onView: (row: MockIdleResource) => handleEdit(row.id)
-              }}
-              pagination={{
-                page: 1,
-                rowsPerPage: 20,
-                total: resources.length,
-                onPageChange: (page: number) => {
-                  // TODO: Implement pagination API call
-                  console.log('Page changed to:', page);
-                },
-                onRowsPerPageChange: (rowsPerPage: number) => {
-                  // TODO: Implement page size change API call
-                  console.log('Page size changed to:', rowsPerPage);
-                }
-              }}
-            />
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Urgent Resources Alert */}
-      {resources.some(r => r.isUrgent) && (
-        <Alert severity="warning" sx={{ mt: 2 }}>
-          <Typography variant="body2">
-            {resources.filter(r => r.isUrgent).length} resource(s) have been idle for more than 2 months and require attention.
-          </Typography>
-        </Alert>
-      )}
+        {/* Confirmation Dialogs */}
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          title="Delete Resource"
+          message="Are you sure you want to delete this resource? This action cannot be undone."
+          onConfirm={() => {
+            // TODO: Implement delete API call
+            setDeleteDialogOpen(false);
+          }}
+          onCancel={() => setDeleteDialogOpen(false)}
+        />
 
-      {/* Delete Confirmation Dialogs */}
-      <ConfirmDialog
-        open={deleteDialogOpen}
-        title="Delete Resource"
-        message="Are you sure you want to delete this resource? This action cannot be undone."
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteDialogOpen(false)}
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="danger"
-      />
-
-      <ConfirmDialog
-        open={bulkDeleteDialogOpen}
-        title="Bulk Delete Resources"
-        message={`Are you sure you want to delete ${selectedRows.length} selected resource(s)? This action cannot be undone.`}
-        onConfirm={confirmBulkDelete}
-        onCancel={() => setBulkDeleteDialogOpen(false)}
-        confirmText="Delete All"
-        cancelText="Cancel"
-        variant="danger"
-      />
-    </Box>
+        <ConfirmDialog
+          open={bulkDeleteDialogOpen}
+          title="Delete Multiple Resources"
+          message={`Are you sure you want to delete ${selectedRows.length} selected resources? This action cannot be undone.`}
+          onConfirm={() => {
+            // TODO: Implement bulk delete API call
+            setBulkDeleteDialogOpen(false);
+            setSelectedRows([]);
+          }}
+          onCancel={() => setBulkDeleteDialogOpen(false)}
+        />
+      </Box>
     </DashboardLayout>
   );
 }
