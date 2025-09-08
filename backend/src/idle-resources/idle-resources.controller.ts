@@ -59,11 +59,15 @@ export class IdleResourcesController {
     type: PaginatedIdleResourceResponseDto
   })
   @Roles(UserRole.ADMIN, UserRole.RA_ALL, UserRole.RA_DEPARTMENT, UserRole.MANAGER, UserRole.VIEWER)
-  async findAll(@Query() searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    // TODO: Implement role-based filtering (Manager sees only their department)
-    // TODO: Add advanced search functionality
-    // TODO: Implement caching for frequently accessed data
-    return await this.idleResourcesService.findAll(searchCriteria);
+  async findAll(
+    @Query() searchCriteria: SearchCriteriaDto,
+    @CurrentUser() user: any
+  ): Promise<PaginatedIdleResourceResponseDto> {
+    return await this.idleResourcesService.findAll(
+      searchCriteria, 
+      user.role, 
+      user.departmentId
+    );
   }
 
   @Get('search')
@@ -74,10 +78,10 @@ export class IdleResourcesController {
     type: PaginatedIdleResourceResponseDto
   })
   @Roles(UserRole.ADMIN, UserRole.RA_ALL, UserRole.RA_DEPARTMENT, UserRole.MANAGER, UserRole.VIEWER)
-  async search(@Query() searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    // TODO: Implement full-text search across multiple fields
-    // TODO: Add search result highlighting
-    // TODO: Implement search history and suggestions
+  async search(
+    @Query() searchCriteria: SearchCriteriaDto,
+    @CurrentUser() user: any
+  ): Promise<PaginatedIdleResourceResponseDto> {
     return await this.idleResourcesService.search(searchCriteria);
   }
 

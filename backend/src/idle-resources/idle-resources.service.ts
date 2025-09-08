@@ -20,24 +20,160 @@ export class IdleResourcesService {
     private idleResourceRepository: Repository<IdleResource>,
   ) {}
 
-  async findAll(searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    // TODO: Implement role-based filtering (Manager sees only their department resources)
-    // TODO: Add performance optimization with proper indexing
-    // TODO: Implement caching for frequently accessed paginated data
-    // TODO: Add advanced search across multiple fields (name, employee code, skills)
-    // TODO: Implement urgent resources highlighting (idle >= 2 months)
-    
-    throw new Error('Method not implemented');
+  async findAll(
+    searchCriteria: SearchCriteriaDto, 
+    userRole?: string, 
+    userDeptId?: number
+  ): Promise<PaginatedIdleResourceResponseDto> {
+    const { 
+      page = 1, 
+      pageSize = 20, 
+      search, 
+      departmentId, 
+      status, 
+      idleFromStart,
+      idleFromEnd,
+      urgent,
+      sortBy = 'updatedAt',
+      sortOrder = 'DESC'
+    } = searchCriteria;
+
+    // Build query with joins
+    const queryBuilder = this.idleResourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.department', 'department')
+      .leftJoinAndSelect('resource.createdByUser', 'createdByUser')
+      .leftJoinAndSelect('resource.updatedByUser', 'updatedByUser')
+      .leftJoin('resource.cvFiles', 'cvFiles')
+      .addSelect('COUNT(cvFiles.id)', 'cvFilesCount')
+      .groupBy('resource.id, department.id, createdByUser.id, updatedByUser.id');
+
+    // Apply role-based filtering
+    if (userRole === 'manager' && userDeptId) {
+      queryBuilder.andWhere('resource.departmentId = :userDeptId', { userDeptId });
+    }
+
+    // Apply search filters
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(resource.fullName) LIKE :search OR ' +
+        'LOWER(resource.employeeCode) LIKE :search OR ' +
+        'LOWER(resource.skillSet) LIKE :search)',
+        { search: searchTerm }
+      );
+    }
+
+    if (departmentId) {
+      queryBuilder.andWhere('resource.departmentId = :departmentId', { departmentId });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('resource.status = :status', { status });
+    }
+
+    if (idleFromStart) {
+      queryBuilder.andWhere('resource.idleFrom >= :idleFromStart', { idleFromStart });
+    }
+
+    if (idleFromEnd) {
+      queryBuilder.andWhere('resource.idleFrom <= :idleFromEnd', { idleFromEnd });
+    }
+
+    // Filter urgent resources (idle >= 2 months)
+    if (urgent) {
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      queryBuilder.andWhere('resource.idleFrom <= :twoMonthsAgo', { twoMonthsAgo });
+    }
+
+    // Apply sorting
+    const sortField = this.getSortField(sortBy);
+    queryBuilder.orderBy(sortField, sortOrder);
+
+    // Get total count
+    const totalQuery = queryBuilder.clone();
+    const total = await totalQuery.getCount();
+
+    // Apply pagination
+    const skip = (page - 1) * pageSize;
+    const resources = await queryBuilder
+      .skip(skip)
+      .take(pageSize)
+      .getRawAndEntities();
+
+    // Transform to response DTOs
+    const data = resources.entities.map((resource, index) => {
+      const raw = resources.raw[index];
+      return this.transformToResponseDto(resource, parseInt(raw.cvFilesCount) || 0);
+    });
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(total / pageSize);
+    const hasNext = page < totalPages;
+    const hasPrev = page > 1;
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      hasNext,
+      hasPrev,
+    };
   }
 
   async search(searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    // TODO: Implement full-text search functionality
-    // TODO: Add search result ranking and relevance scoring
-    // TODO: Implement search suggestions and auto-complete
-    // TODO: Add search result highlighting for matched terms
-    // TODO: Track search queries for analytics
-    
-    throw new Error('Method not implemented');
+    // For task T-S03-001, search is the same as findAll
+    // This will be enhanced in T-S03-002 for advanced search functionality
+    return this.findAll(searchCriteria);
+  }
+
+  // Helper method to get proper sort field
+  private getSortField(sortBy: string): string {
+    const sortMapping: Record<string, string> = {
+      'fullName': 'resource.fullName',
+      'employeeCode': 'resource.employeeCode',
+      'departmentName': 'department.name',
+      'position': 'resource.position',
+      'status': 'resource.status',
+      'idleFrom': 'resource.idleFrom',
+      'rate': 'resource.rate',
+      'createdAt': 'resource.createdAt',
+      'updatedAt': 'resource.updatedAt',
+    };
+
+    return sortMapping[sortBy] || 'resource.updatedAt';
+  }
+
+  // Helper method to transform entity to response DTO
+  private transformToResponseDto(resource: IdleResource, cvFilesCount: number): IdleResourceResponseDto {
+    return {
+      id: resource.id,
+      employeeCode: resource.employeeCode,
+      fullName: resource.fullName,
+      departmentId: resource.departmentId,
+      department: {
+        id: resource.department.id,
+        name: resource.department.name,
+        code: resource.department.code || '',
+      },
+      position: resource.position,
+      email: resource.email,
+      skillSet: resource.skillSet,
+      idleFrom: resource.idleFrom,
+      idleTo: resource.idleTo,
+      status: resource.status,
+      processNote: resource.processNote,
+      rate: resource.rate ? parseFloat(resource.rate.toString()) : undefined,
+      isUrgent: resource.isUrgent,
+      cvFilesCount,
+      createdBy: resource.createdBy,
+      updatedBy: resource.updatedBy,
+      createdAt: resource.createdAt,
+      updatedAt: resource.updatedAt,
+    };
   }
 
   async findOne(id: number): Promise<IdleResourceResponseDto> {
