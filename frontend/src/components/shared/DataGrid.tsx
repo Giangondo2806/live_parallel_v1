@@ -124,8 +124,8 @@ export function DataGrid<T = any>({
   };
 
   const handleSelectRow = (rowId: string) => {
-    if (!selection) return;
-    
+    if (!selection || !selection.selected) return;
+
     const selectedIndex = selection.selected.indexOf(rowId);
     let newSelected: string[] = [];
 
@@ -217,7 +217,7 @@ export function DataGrid<T = any>({
   };
 
   const isSelected = (rowId: string) => 
-    selection?.selected.indexOf(rowId) !== -1;
+    selection?.selected?.indexOf(rowId) !== -1;
 
   return (
     <Card className="argon-card">
@@ -256,7 +256,7 @@ export function DataGrid<T = any>({
       )}
 
       {/* Selection Toolbar */}
-      {selection && selection.selected.length > 0 && (
+      {selection && selection.selected && selection.selected.length > 0 && (
         <Toolbar className="bg-blue-50 border-b border-blue-200">
           <Typography variant="subtitle1" className="flex-1 text-blue-800">
             {selection.selected.length} mục đã chọn
@@ -279,12 +279,12 @@ export function DataGrid<T = any>({
                 <TableCell padding="checkbox">
                   <Checkbox
                     indeterminate={
-                      selection.selected.length > 0 && 
+                      selection.selected && selection.selected.length > 0 && 
                       selection.selected.length < rows.length
                     }
                     checked={
                       rows.length > 0 && 
-                      selection.selected.length === rows.length
+                      selection.selected && selection.selected.length === rows.length
                     }
                     onChange={handleSelectAll}
                   />

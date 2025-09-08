@@ -40,8 +40,7 @@ import {
   IdleResourceResponseDto,
   PaginatedIdleResourceResponseDto,
   BulkDeleteDto,
-  ImportResultDto,
-  ExportFilterDto
+  ImportResultDto
 } from './dto';
 
 @ApiTags('Idle Resources')
@@ -97,7 +96,7 @@ export class IdleResourcesController {
   })
   @Roles(UserRole.ADMIN, UserRole.RA_ALL, UserRole.RA_DEPARTMENT, UserRole.MANAGER)
   async exportToExcel(
-    @Query() exportFilter: ExportFilterDto,
+    @Query() exportFilter: SearchCriteriaDto,
     @Res() res: Response
   ): Promise<void> {
     // TODO: Implement Excel export with filtered data
@@ -177,6 +176,25 @@ export class IdleResourcesController {
     // TODO: Send import summary email to user
     // TODO: Handle duplicate employee codes gracefully
     return await this.idleResourcesService.importFromExcel(file, userId);
+  }
+
+  @Get('template/download')
+  @ApiOperation({ summary: 'Download Excel import template' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Template downloaded successfully',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @Roles(UserRole.ADMIN, UserRole.RA_ALL)
+  async downloadImportTemplate(@Res() res: Response): Promise<void> {
+    await this.idleResourcesService.generateImportTemplate(res);
   }
 
   @Put(':id')

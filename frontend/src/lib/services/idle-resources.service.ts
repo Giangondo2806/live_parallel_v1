@@ -93,8 +93,20 @@ export const idleResourcesService = {
 
   // Export idle resources to Excel
   async exportIdleResources(params: ResourceSearchParams = {}): Promise<Blob> {
+    // Filter out empty values to avoid validation errors
+    const cleanParams: Record<string, any> = {};
+    
+    Object.entries(params).forEach(([key, value]) => {
+      // Only include non-empty, defined values
+      if (value !== undefined && value !== null && value !== '') {
+        cleanParams[key] = value;
+      }
+    });
+
+    console.log('Clean export params:', cleanParams);
+
     const response = await api.get('/idle-resources/export', {
-      params,
+      params: cleanParams,
       responseType: 'blob'
     });
     return response.data;
@@ -109,6 +121,14 @@ export const idleResourcesService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+    });
+    return response.data;
+  },
+
+  // Download import template
+  async downloadImportTemplate(): Promise<Blob> {
+    const response = await api.get('/idle-resources/template/download', {
+      responseType: 'blob'
     });
     return response.data;
   },

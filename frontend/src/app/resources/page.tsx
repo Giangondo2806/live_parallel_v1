@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { DataGrid, DataGridColumn } from '../../components/shared/DataGrid';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+import { ImportDialog } from '../../components/resources/ImportDialog';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { 
   idleResourcesService, 
@@ -97,6 +98,7 @@ export default function IdleResourceListPage() {
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState<boolean>(false);
+  const [importDialogOpen, setImportDialogOpen] = useState<boolean>(false);
 
   // Data Grid columns definition
   const columns: DataGridColumn<IdleResourceData>[] = [
@@ -288,15 +290,123 @@ export default function IdleResourceListPage() {
     setBulkDeleteDialogOpen(true);
   }, []);
 
-  const handleExport = useCallback(() => {
-    // TODO: Implement Excel export functionality
-    console.log('Export resources to Excel');
-  }, []);
+  const handleExport = useCallback(async () => {
+    console.log('Export button clicked');
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Use current search filters for export
+      const exportParams = {
+        ...searchFilters,
+        page: undefined, // Export all pages
+        pageSize: undefined
+      };
+
+      console.log('Export params:', exportParams);
+
+      const blob = await idleResourcesService.exportIdleResources(exportParams);
+      console.log('Export blob received:', blob);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `idle-resources-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('Export completed successfully');
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      setError(error instanceof Error ? error.message : 'Export failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchFilters]);
 
   const handleImport = useCallback(() => {
-    // TODO: Implement Excel import functionality
-    console.log('Import resources from Excel');
+    console.log('Opening import dialog...');
+    setImportDialogOpen(true);
   }, []);
+
+  const handleImportComplete = useCallback(async (result: any) => {
+    console.log('Import completed with result:', result);
+    
+    // Show success message with details
+    if (result.successCount > 0) {
+      setError(null);
+      // Refresh the resource list to show imported data
+      await loadResourceList();
+      
+      // Show success message (you can add a success state if needed)
+      console.log(`Successfully imported ${result.successCount} resources`);
+    }
+    
+    if (result.errorCount > 0) {
+      const errorMessage = `Import completed with ${result.errorCount} errors. Check console for details.`;
+      setError(errorMessage);
+      console.error('Import errors:', result.errors);
+    }
+  }, [loadResourceList]);
+
+  const handleImportDialogClose = useCallback(() => {
+    console.log('Closing import dialog...');
+    setImportDialogOpen(false);
+  }, []);
+
+  const validateExcelFile = useCallback((file: File): boolean => {
+    // Check file extension
+    const validExtensions = ['.xlsx', '.xls'];
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      setError('Invalid file format. Please select an Excel file (.xlsx or .xls)');
+      return false;
+    }
+
+    // Check file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError('File size exceeds 10MB limit');
+      return false;
+    }
+
+    return true;
+  }, []);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!validateExcelFile(file)) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await idleResourcesService.importIdleResources(file);
+      
+      // Handle import results
+      console.log('Import result:', result);
+      
+      // Refresh resource list after successful import
+      if (result.successCount > 0) {
+        await loadResourceList();
+      }
+      
+    } catch (error) {
+      console.error('Import failed:', error);
+      setError(error instanceof Error ? error.message : 'Import failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [validateExcelFile, loadResourceList]);
 
   const handleRowSelect = useCallback((rowId: number) => {
     setSelectedRows(prev => 
@@ -327,6 +437,7 @@ export default function IdleResourceListPage() {
                   startIcon={<ImportIcon />}
                   onClick={handleImport}
                   size="small"
+                  disabled={loading}
                 >
                   Import
                 </Button>
@@ -335,6 +446,7 @@ export default function IdleResourceListPage() {
                   startIcon={<ExportIcon />}
                   onClick={handleExport}
                   size="small"
+                  disabled={loading}
                 >
                   Export
                 </Button>
@@ -343,6 +455,7 @@ export default function IdleResourceListPage() {
                   startIcon={<AddIcon />}
                   onClick={handleAddNew}
                   size="small"
+                  disabled={loading}
                 >
                   Add New
                 </Button>
@@ -517,6 +630,13 @@ export default function IdleResourceListPage() {
             setSelectedRows([]);
           }}
           onCancel={() => setBulkDeleteDialogOpen(false)}
+        />
+
+        {/* Import Dialog */}
+        <ImportDialog
+          open={importDialogOpen}
+          onClose={handleImportDialogClose}
+          onImportComplete={handleImportComplete}
         />
       </Box>
     </DashboardLayout>
