@@ -98,13 +98,21 @@ export default function IdleResourceListPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState<boolean>(false);
 
-  // Data Grid columns definition
+  // Data Grid columns definition with search highlighting for T-S03-002
   const columns: DataGridColumn<IdleResourceData>[] = [
     {
       id: 'employeeCode',
       label: 'Employee Code',
       minWidth: 120,
-      sortable: true
+      sortable: true,
+      render: (value: string, row: IdleResourceData) => (
+        <Typography 
+          variant="body2" 
+          dangerouslySetInnerHTML={{
+            __html: row.searchHighlight?.employeeCode || value
+          }}
+        />
+      )
     },
     {
       id: 'fullName',
@@ -118,7 +126,20 @@ export default function IdleResourceListPage() {
               <WarningIcon color="warning" fontSize="small" />
             </Tooltip>
           )}
-          <Typography variant="body2">{value}</Typography>
+          <Typography 
+            variant="body2"
+            dangerouslySetInnerHTML={{
+              __html: row.searchHighlight?.fullName || value
+            }}
+          />
+          {row.searchRelevance && row.searchRelevance > 80 && (
+            <Chip 
+              label={`${row.searchRelevance}%`}
+              size="small"
+              color="primary"
+              sx={{ fontSize: '0.7rem', height: '16px' }}
+            />
+          )}
         </Box>
       )
     },
@@ -127,24 +148,43 @@ export default function IdleResourceListPage() {
       label: 'Department',
       minWidth: 130,
       sortable: true,
-      render: (value: IdleResourceData['department']) => value?.name || '-'
+      render: (value: IdleResourceData['department'], row: IdleResourceData) => (
+        <Typography
+          variant="body2"
+          dangerouslySetInnerHTML={{
+            __html: row.searchHighlight?.department || value?.name || '-'
+          }}
+        />
+      )
     },
     {
       id: 'position',
       label: 'Position',
       minWidth: 150,
-      sortable: true
+      sortable: true,
+      render: (value: string, row: IdleResourceData) => (
+        <Typography
+          variant="body2"
+          dangerouslySetInnerHTML={{
+            __html: row.searchHighlight?.position || value
+          }}
+        />
+      )
     },
     {
       id: 'skillSet',
       label: 'Skills',
       minWidth: 200,
       sortable: false,
-      render: (value: string) => (
+      render: (value: string, row: IdleResourceData) => (
         <Tooltip title={value || 'No skills listed'}>
-          <Typography variant="body2" noWrap>
-            {value || '-'}
-          </Typography>
+          <Typography 
+            variant="body2" 
+            noWrap
+            dangerouslySetInnerHTML={{
+              __html: row.searchHighlight?.skillSet || value || '-'
+            }}
+          />
         </Tooltip>
       )
     },
@@ -200,7 +240,7 @@ export default function IdleResourceListPage() {
     }
   ];
 
-  // Load resources from API
+  // Enhanced loadResourceList to support both search and regular loading
   const loadResourceList = useCallback(async (searchParams: ResourceSearchParams = {}) => {
     try {
       setLoading(true);
@@ -213,7 +253,10 @@ export default function IdleResourceListPage() {
         pageSize
       };
 
-      const response = await idleResourcesService.getIdleResources(params);
+      // Use search endpoint if there's search text, otherwise use regular endpoint
+      const response = params.search && params.search.trim()
+        ? await idleResourcesService.searchIdleResources(params)
+        : await idleResourcesService.getIdleResources(params);
       
       setResources(response.data);
       setTotal(response.total);
@@ -229,18 +272,40 @@ export default function IdleResourceListPage() {
     }
   }, [searchFilters, page, pageSize]);
 
-  // Initial data load
-  useEffect(() => {
-    loadResourceList();
-  }, [loadResourceList]);
+  // Enhanced search functionality for T-S03-002
+  const handleSearch = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setPage(1); // Reset to first page for new search
 
-  // Event handlers
-  const handleSearch = useCallback(() => {
-    setPage(1);
-    loadResourceList();
-  }, [loadResourceList]);
+      const searchParams = {
+        ...searchFilters,
+        page: 1,
+        pageSize
+      };
 
-  const handleReset = useCallback(() => {
+      // Use search endpoint for advanced search with highlighting
+      const response = searchFilters.search && searchFilters.search.trim()
+        ? await idleResourcesService.searchIdleResources(searchParams)
+        : await idleResourcesService.getIdleResources(searchParams);
+      
+      setResources(response.data);
+      setTotal(response.total);
+      setTotalPages(response.totalPages);
+      setPage(response.page);
+      setPageSize(response.pageSize);
+      
+    } catch (err) {
+      console.error('Failed to search resources:', err);
+      setError('Failed to search idle resources. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchFilters, pageSize]);
+
+  const handleReset = useCallback(async () => {
+    // Clear all search filters and reload data
     setSearchFilters({
       search: '',
       departmentId: undefined,
@@ -252,23 +317,126 @@ export default function IdleResourceListPage() {
       sortOrder: 'DESC'
     });
     setPage(1);
-    loadResourceList();
-  }, [loadResourceList]);
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await idleResourcesService.getIdleResources({
+        page: 1,
+        pageSize: 20,
+        sortBy: 'updatedAt',
+        sortOrder: 'DESC'
+      });
+      
+      setResources(response.data);
+      setTotal(response.total);
+      setTotalPages(response.totalPages);
+      setPage(response.page);
+      setPageSize(response.pageSize);
+      
+    } catch (err) {
+      console.error('Failed to reset and load resources:', err);
+      setError('Failed to load idle resources. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handlePageChange = useCallback((newPage: number) => {
-    setPage(newPage);
-    loadResourceList();
-  }, [loadResourceList]);
-
-  const handleSort = useCallback((column: string, direction: 'ASC' | 'DESC') => {
-    setSearchFilters(prev => ({
-      ...prev,
+  const handleSort = useCallback(async (column: string, direction: 'ASC' | 'DESC') => {
+    const newFilters = {
+      ...searchFilters,
       sortBy: column,
-      sortOrder: direction
-    }));
+      sortOrder: direction,
+      page: 1 // Reset to first page when sorting
+    };
+    
+    setSearchFilters(newFilters);
+    setPage(1);
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Use search endpoint if there's a search term, otherwise use regular endpoint
+      const response = newFilters.search && newFilters.search.trim()
+        ? await idleResourcesService.searchIdleResources(newFilters)
+        : await idleResourcesService.getIdleResources(newFilters);
+      
+      setResources(response.data);
+      setTotal(response.total);
+      setTotalPages(response.totalPages);
+      setPage(response.page);
+      
+    } catch (err) {
+      console.error('Failed to sort resources:', err);
+      setError('Failed to sort idle resources. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchFilters]);
+
+  // Enhanced page change handler for T-S03-002
+  const handlePageChange = useCallback(async (newPage: number) => {
+    setPage(newPage);
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {
+        ...searchFilters,
+        page: newPage,
+        pageSize
+      };
+
+      // Use search endpoint if there's search text, otherwise use regular endpoint
+      const response = params.search && params.search.trim()
+        ? await idleResourcesService.searchIdleResources(params)
+        : await idleResourcesService.getIdleResources(params);
+      
+      setResources(response.data);
+      setTotal(response.total);
+      setTotalPages(response.totalPages);
+      setPage(response.page);
+      
+    } catch (err) {
+      console.error('Failed to change page:', err);
+      setError('Failed to load page. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchFilters, pageSize]);
+
+  // Initial data load
+  useEffect(() => {
     loadResourceList();
   }, [loadResourceList]);
 
+  // Debounced search effect for T-S03-002
+  useEffect(() => {
+    const searchTerm = searchFilters.search;
+    if (!searchTerm || searchTerm.trim() === '') {
+      return; // Don't auto-search for empty terms
+    }
+
+    const timeoutId = setTimeout(() => {
+      handleSearch();
+    }, 500); // Debounce search by 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchFilters.search]); // Only trigger on search text change
+
+  // Auto-refresh effect for filters (department, status, urgent)
+  useEffect(() => {
+    if (searchFilters.departmentId !== undefined || 
+        searchFilters.status !== undefined || 
+        searchFilters.urgent !== false) {
+      handleSearch();
+    }
+  }, [searchFilters.departmentId, searchFilters.status, searchFilters.urgent]);
+
+  // Event handlers for various actions
   const handleRefresh = useCallback(() => {
     loadResourceList();
   }, [loadResourceList]);
@@ -351,16 +519,22 @@ export default function IdleResourceListPage() {
           />
           
           <CardContent>
-            {/* Search and Filter Section */}
+            {/* Enhanced Search and Filter Section - T-S03-002 */}
             <Stack spacing={2} sx={{ mb: 3 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
                 <TextField
                   label="Search..."
-                  placeholder="Search by name, employee code, or skills"
+                  placeholder="Search by name, employee code, skills, position, or department"
                   value={searchFilters.search || ''}
-                  onChange={(e) => setSearchFilters(prev => ({ ...prev, search: e.target.value }))}
-                  sx={{ minWidth: 300 }}
+                  onChange={(e) => {
+                    setSearchFilters(prev => ({ ...prev, search: e.target.value }));
+                    // Auto-search with debouncing will be handled by useEffect
+                  }}
+                  sx={{ minWidth: 350 }}
                   size="small"
+                  InputProps={{
+                    startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                  }}
                 />
                 
                 <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -400,10 +574,12 @@ export default function IdleResourceListPage() {
                   </Select>
                 </FormControl>
 
+                {/* Advanced Search Actions */}
                 <Button
                   variant="contained"
                   startIcon={<SearchIcon />}
                   onClick={handleSearch}
+                  size="small"
                   disabled={loading}
                 >
                   Search
@@ -413,14 +589,33 @@ export default function IdleResourceListPage() {
                   variant="outlined"
                   startIcon={<RefreshIcon />}
                   onClick={handleReset}
+                  size="small"
                   disabled={loading}
                 >
                   Reset
                 </Button>
-                
-                <IconButton onClick={handleRefresh} disabled={loading}>
-                  <RefreshIcon />
-                </IconButton>
+              </Stack>
+
+              {/* Additional Filters Row */}
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                <Button
+                  variant={searchFilters.urgent ? "contained" : "outlined"}
+                  onClick={() => setSearchFilters(prev => ({ ...prev, urgent: !prev.urgent }))}
+                  size="small"
+                  startIcon={<WarningIcon />}
+                  color={searchFilters.urgent ? "warning" : "primary"}
+                >
+                  Urgent Only
+                </Button>
+
+                {/* Search Results Summary */}
+                {total > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    {searchFilters.search && searchFilters.search.trim() 
+                      ? `Found ${total} results for "${searchFilters.search.trim()}"` 
+                      : `Showing ${total} resources`}
+                  </Typography>
+                )}
               </Stack>
             </Stack>
 
@@ -452,9 +647,14 @@ export default function IdleResourceListPage() {
                 <Box
                   sx={{
                     position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
                     zIndex: 1
                   }}
                 >
@@ -466,28 +666,31 @@ export default function IdleResourceListPage() {
                 columns={columns}
                 rows={resources}
                 loading={loading}
-                selection={{
-                  selected: selectedRows.map(String),
-                  onSelectionChange: (selected: string[]) => setSelectedRows(selected.map(Number)),
-                  getRowId: (row: IdleResourceData) => String(row.id)
-                }}
-                sorting={{
-                  field: searchFilters.sortBy as keyof IdleResourceData,
-                  direction: searchFilters.sortOrder === 'ASC' ? 'asc' : 'desc',
-                  onSort: (field: keyof IdleResourceData) => {
-                    const direction = searchFilters.sortOrder === 'ASC' ? 'DESC' : 'ASC';
-                    handleSort(String(field), direction);
-                  }
-                }}
                 pagination={{
-                  page: page - 1, // DataGrid expects 0-based page
+                  page: page - 1, // Convert to 0-based for Material-UI
                   rowsPerPage: pageSize,
-                  total,
+                  total: total,
                   onPageChange: (newPage: number) => handlePageChange(newPage + 1), // Convert back to 1-based
                   onRowsPerPageChange: (newPageSize: number) => {
                     setPageSize(newPageSize);
                     setPage(1);
-                    loadResourceList();
+                    loadResourceList({ pageSize: newPageSize, page: 1 });
+                  }
+                }}
+                selection={{
+                  selected: selectedRows.map(id => id.toString()),
+                  onSelectionChange: (selected: string[]) => {
+                    setSelectedRows(selected.map(id => parseInt(id)));
+                  },
+                  getRowId: (row: IdleResourceData) => row.id.toString()
+                }}
+                sorting={{
+                  field: searchFilters.sortBy as keyof IdleResourceData || 'updatedAt',
+                  direction: (searchFilters.sortOrder?.toLowerCase() as 'asc' | 'desc') || 'desc',
+                  onSort: (field: keyof IdleResourceData) => {
+                    const currentDirection = searchFilters.sortOrder || 'DESC';
+                    const newDirection = currentDirection === 'DESC' ? 'ASC' : 'DESC';
+                    handleSort(field as string, newDirection);
                   }
                 }}
               />
@@ -495,26 +698,26 @@ export default function IdleResourceListPage() {
           </CardContent>
         </Card>
 
-        {/* Confirmation Dialogs */}
+        {/* Delete Confirmation Dialog */}
         <ConfirmDialog
           open={deleteDialogOpen}
           title="Delete Resource"
           message="Are you sure you want to delete this resource? This action cannot be undone."
           onConfirm={() => {
-            // TODO: Implement delete API call
+            // TODO: Implement actual delete logic
             setDeleteDialogOpen(false);
           }}
           onCancel={() => setDeleteDialogOpen(false)}
         />
 
+        {/* Bulk Delete Confirmation Dialog */}
         <ConfirmDialog
           open={bulkDeleteDialogOpen}
           title="Delete Multiple Resources"
           message={`Are you sure you want to delete ${selectedRows.length} selected resources? This action cannot be undone.`}
           onConfirm={() => {
-            // TODO: Implement bulk delete API call
+            // TODO: Implement actual bulk delete logic
             setBulkDeleteDialogOpen(false);
-            setSelectedRows([]);
           }}
           onCancel={() => setBulkDeleteDialogOpen(false)}
         />

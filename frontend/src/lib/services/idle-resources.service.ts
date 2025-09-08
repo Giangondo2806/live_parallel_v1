@@ -24,6 +24,15 @@ export interface IdleResourceData {
   updatedBy: number;
   createdAt: string;
   updatedAt: string;
+  // Enhanced search fields for T-S03-002
+  searchRelevance?: number;
+  searchHighlight?: {
+    fullName?: string;
+    employeeCode?: string;
+    skillSet?: string;
+    position?: string;
+    department?: string;
+  };
 }
 
 export interface PaginatedIdleResourceResponse {
