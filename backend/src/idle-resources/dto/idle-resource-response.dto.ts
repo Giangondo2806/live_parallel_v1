@@ -62,6 +62,19 @@ export class IdleResourceResponseDto {
 
   @ApiProperty({ description: 'Updated at', example: '2024-01-15T10:30:00Z' })
   updatedAt: Date;
+
+  // Search enhancement fields for T-S03-002
+  @ApiPropertyOptional({ description: 'Search result relevance score (0-100)', example: 85 })
+  searchRelevance?: number;
+
+  @ApiPropertyOptional({ description: 'Search highlight information for UI' })
+  searchHighlight?: {
+    fullName?: string;
+    employeeCode?: string;
+    skillSet?: string;
+    position?: string;
+    department?: string;
+  };
 }
 
 export class PaginatedIdleResourceResponseDto {

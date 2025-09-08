@@ -53,13 +53,14 @@ export class IdleResourcesService {
       queryBuilder.andWhere('resource.departmentId = :userDeptId', { userDeptId });
     }
 
-    // Apply search filters
+    // Apply basic search filters (enhanced from T-S03-001)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
         '(LOWER(resource.fullName) LIKE :search OR ' +
         'LOWER(resource.employeeCode) LIKE :search OR ' +
-        'LOWER(resource.skillSet) LIKE :search)',
+        'LOWER(resource.skillSet) LIKE :search OR ' +
+        'LOWER(resource.position) LIKE :search)',
         { search: searchTerm }
       );
     }
@@ -124,10 +125,156 @@ export class IdleResourcesService {
     };
   }
 
-  async search(searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    // For task T-S03-001, search is the same as findAll
-    // This will be enhanced in T-S03-002 for advanced search functionality
-    return this.findAll(searchCriteria);
+  async search(
+    searchCriteria: SearchCriteriaDto,
+    userRole?: string,
+    userDeptId?: number
+  ): Promise<PaginatedIdleResourceResponseDto> {
+    // Enhanced search implementation for T-S03-002
+    const {
+      page = 1,
+      pageSize = 20,
+      search,
+      departmentId,
+      status,
+      idleFromStart,
+      idleFromEnd,
+      urgent,
+      sortBy = 'updatedAt',
+      sortOrder = 'DESC'
+    } = searchCriteria;
+
+    // Build advanced search query with full-text search capabilities
+    const queryBuilder = this.idleResourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.department', 'department')
+      .leftJoinAndSelect('resource.createdByUser', 'createdByUser')
+      .leftJoinAndSelect('resource.updatedByUser', 'updatedByUser')
+      .leftJoin('resource.cvFiles', 'cvFiles')
+      .addSelect('COUNT(cvFiles.id)', 'cvFilesCount')
+      .groupBy('resource.id, department.id, createdByUser.id, updatedByUser.id');
+
+    // Apply role-based filtering
+    if (userRole === 'manager' && userDeptId) {
+      queryBuilder.andWhere('resource.departmentId = :userDeptId', { userDeptId });
+    }
+
+    // Enhanced search with multiple field matching and ranking
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      const searchPattern = `%${searchTerm.toLowerCase()}%`;
+      
+      // Add weighted search across multiple fields
+      queryBuilder.andWhere(
+        `(
+          LOWER(resource.fullName) LIKE :search OR 
+          LOWER(resource.employeeCode) LIKE :search OR 
+          LOWER(resource.skillSet) LIKE :search OR
+          LOWER(resource.position) LIKE :search OR
+          LOWER(resource.email) LIKE :search OR
+          LOWER(department.name) LIKE :search
+        )`,
+        { search: searchPattern }
+      );
+
+      // Add search relevance scoring for better results
+      queryBuilder.addSelect(
+        `(
+          CASE 
+            WHEN LOWER(resource.employeeCode) LIKE :exactSearch THEN 100
+            WHEN LOWER(resource.fullName) LIKE :exactSearch THEN 90
+            WHEN LOWER(resource.employeeCode) LIKE :search THEN 80
+            WHEN LOWER(resource.fullName) LIKE :search THEN 70
+            WHEN LOWER(resource.position) LIKE :search THEN 60
+            WHEN LOWER(department.name) LIKE :search THEN 50
+            WHEN LOWER(resource.skillSet) LIKE :search THEN 40
+            WHEN LOWER(resource.email) LIKE :search THEN 30
+            ELSE 10
+          END
+        )`,
+        'searchRelevance'
+      ).setParameter('exactSearch', `${searchTerm.toLowerCase()}`);
+    }
+
+    // Department filter
+    if (departmentId) {
+      queryBuilder.andWhere('resource.departmentId = :departmentId', { departmentId });
+    }
+
+    // Status filter
+    if (status) {
+      queryBuilder.andWhere('resource.status = :status', { status });
+    }
+
+    // Date range filters
+    if (idleFromStart) {
+      queryBuilder.andWhere('resource.idleFrom >= :idleFromStart', { idleFromStart });
+    }
+
+    if (idleFromEnd) {
+      queryBuilder.andWhere('resource.idleFrom <= :idleFromEnd', { idleFromEnd });
+    }
+
+    // Urgent resources filter (idle >= 2 months)
+    if (urgent) {
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      queryBuilder.andWhere('resource.idleFrom <= :twoMonthsAgo', { twoMonthsAgo });
+    }
+
+    // Apply sorting with search relevance priority
+    if (search && search.trim()) {
+      queryBuilder.orderBy('searchRelevance', 'DESC');
+      if (sortBy !== 'relevance') {
+        queryBuilder.addOrderBy(this.getSortField(sortBy), sortOrder);
+      }
+    } else {
+      queryBuilder.orderBy(this.getSortField(sortBy), sortOrder);
+    }
+
+    // Get total count for pagination
+    const totalQuery = queryBuilder.clone();
+    if (search && search.trim()) {
+      // Remove search relevance from count query
+      totalQuery.select('COUNT(DISTINCT resource.id)', 'count');
+    }
+    const total = await totalQuery.getCount();
+
+    // Apply pagination
+    const skip = (page - 1) * pageSize;
+    const resources = await queryBuilder
+      .skip(skip)
+      .take(pageSize)
+      .getRawAndEntities();
+
+    // Transform to response DTOs with search highlighting
+    const data = resources.entities.map((resource, index) => {
+      const raw = resources.raw[index];
+      const dto = this.transformToResponseDto(resource, parseInt(raw.cvFilesCount) || 0);
+      
+      // Add search highlighting if search term provided
+      if (search && search.trim()) {
+        dto.searchHighlight = this.addSearchHighlight(dto, search.trim());
+        dto.searchRelevance = parseInt(raw.searchRelevance) || 0;
+      }
+      
+      return dto;
+    });
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(total / pageSize);
+    const hasNext = page < totalPages;
+    const hasPrev = page > 1;
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      hasNext,
+      hasPrev,
+    };
   }
 
   // Helper method to get proper sort field
@@ -145,6 +292,45 @@ export class IdleResourcesService {
     };
 
     return sortMapping[sortBy] || 'resource.updatedAt';
+  }
+
+  // Helper method to add search highlighting for better UX (T-S03-002)
+  private addSearchHighlight(
+    dto: IdleResourceResponseDto, 
+    searchTerm: string
+  ): IdleResourceResponseDto['searchHighlight'] {
+    const highlight: IdleResourceResponseDto['searchHighlight'] = {};
+    const term = searchTerm.toLowerCase();
+
+    // Helper function to wrap matched text with highlight markers
+    const wrapMatches = (text: string, searchTerm: string): string => {
+      if (!text) return text;
+      const regex = new RegExp(`(${searchTerm})`, 'gi');
+      return text.replace(regex, '<mark>$1</mark>');
+    };
+
+    // Check each field for matches and add highlighting
+    if (dto.fullName && dto.fullName.toLowerCase().includes(term)) {
+      highlight.fullName = wrapMatches(dto.fullName, searchTerm);
+    }
+
+    if (dto.employeeCode && dto.employeeCode.toLowerCase().includes(term)) {
+      highlight.employeeCode = wrapMatches(dto.employeeCode, searchTerm);
+    }
+
+    if (dto.skillSet && dto.skillSet.toLowerCase().includes(term)) {
+      highlight.skillSet = wrapMatches(dto.skillSet, searchTerm);
+    }
+
+    if (dto.position && dto.position.toLowerCase().includes(term)) {
+      highlight.position = wrapMatches(dto.position, searchTerm);
+    }
+
+    if (dto.department?.name && dto.department.name.toLowerCase().includes(term)) {
+      highlight.department = wrapMatches(dto.department.name, searchTerm);
+    }
+
+    return highlight;
   }
 
   // Helper method to transform entity to response DTO

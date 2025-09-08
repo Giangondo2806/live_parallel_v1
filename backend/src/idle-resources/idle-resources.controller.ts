@@ -74,7 +74,7 @@ export class IdleResourcesController {
   @ApiOperation({ summary: 'Advanced search for idle resources' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Returns filtered idle resources',
+    description: 'Returns filtered idle resources with search highlighting',
     type: PaginatedIdleResourceResponseDto
   })
   @Roles(UserRole.ADMIN, UserRole.RA_ALL, UserRole.RA_DEPARTMENT, UserRole.MANAGER, UserRole.VIEWER)
@@ -82,7 +82,11 @@ export class IdleResourcesController {
     @Query() searchCriteria: SearchCriteriaDto,
     @CurrentUser() user: any
   ): Promise<PaginatedIdleResourceResponseDto> {
-    return await this.idleResourcesService.search(searchCriteria);
+    return await this.idleResourcesService.search(
+      searchCriteria,
+      user.role,
+      user.departmentId
+    );
   }
 
   @Get('export')
