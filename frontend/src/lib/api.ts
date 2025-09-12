@@ -57,8 +57,57 @@ export const authApi = {
 
 // Dashboard API
 export const dashboardApi = {
-  getDashboardData: async () => {
-    const response = await api.get('/dashboard/data');
+  getDashboardData: async (filters?: {
+    departmentId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.departmentId) params.append('departmentId', filters.departmentId);
+    if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
+    if (filters?.dateTo) params.append('dateTo', filters.dateTo);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    
+    const response = await api.get(`/dashboard/data?${params.toString()}`);
+    return response.data;
+  },
+
+  getStatistics: async (filters?: {
+    departmentId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.departmentId) params.append('departmentId', filters.departmentId);
+    if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
+    if (filters?.dateTo) params.append('dateTo', filters.dateTo);
+    
+    const response = await api.get(`/dashboard/statistics?${params.toString()}`);
+    return response.data;
+  },
+
+  getRecentActivities: async (filters?: {
+    departmentId?: string;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.departmentId) params.append('departmentId', filters.departmentId);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    
+    const response = await api.get(`/dashboard/recent-activities?${params.toString()}`);
+    return response.data;
+  },
+
+  getDepartmentStats: async (filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
+    if (filters?.dateTo) params.append('dateTo', filters.dateTo);
+    
+    const response = await api.get(`/dashboard/department-stats?${params.toString()}`);
     return response.data;
   },
 };
