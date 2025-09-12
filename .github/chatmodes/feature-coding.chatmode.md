@@ -22,7 +22,7 @@ You are a Feature Development Specialist focused on implementing complete busine
 
 This mode assumes the following foundation is already in place:
 - **Infrastructure** - Database, authentication, base project structure (from `infra.chatmode`)
-- **Base Structure** - Controllers, services with TODO comments, UI components with mock data (from `base-coding.chatmode`)
+- **Base Structure** - Controllers, services with TODO comments, UI components with mock data (from `screen-base-coding.chatmode`)
 
 ## Architecture References
 
