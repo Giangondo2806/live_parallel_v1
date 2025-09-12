@@ -4,6 +4,7 @@ import { Repository, Like, In, Between } from 'typeorm';
 import type { Response } from 'express';
 import { IdleResource } from './entities/idle-resource.entity';
 import { User } from '../users/entities/user.entity';
+import { UserRole } from '../common/types';
 import { 
   CreateIdleResourceDto, 
   UpdateIdleResourceDto, 
@@ -33,18 +34,152 @@ export class IdleResourcesService {
     });
   }
 
-  async findAllWithPagination(searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    // TODO: Implement advanced pagination with filters
-    // TODO: Apply department filter
-    // TODO: Apply status filter  
-    // TODO: Apply date range filters
-    // TODO: Apply urgent filter (idle >= 2 months)
-    // TODO: Apply search term filter (name, employee code, skills)
-    // TODO: Apply sorting by specified field and order
-    // TODO: Calculate total count for pagination
-    // TODO: Apply role-based filtering based on user permissions
+  async findAllWithPagination(searchCriteria: SearchCriteriaDto, user?: User): Promise<PaginatedIdleResourceResponseDto> {
+    const {
+      searchTerm,
+      departmentId,
+      status,
+      position,
+      idleFromStart,
+      idleFromEnd,
+      urgentOnly,
+      skills,
+      page = 1,
+      limit = 10,
+      sortBy = 'updatedAt',
+      sortOrder = 'DESC'
+    } = searchCriteria;
+
+    // Build query with filters
+    const queryBuilder = this.idleResourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.department', 'department')
+      .leftJoinAndSelect('resource.createdByUser', 'createdByUser')
+      .leftJoinAndSelect('resource.updatedByUser', 'updatedByUser')
+      .leftJoinAndSelect('resource.cvFiles', 'cvFiles');
+
+    // Apply role-based filtering
+    if (user) {
+      switch (user.role) {
+        case UserRole.RA_DEPARTMENT:
+        case UserRole.MANAGER:
+          // Manager only sees resources from their department
+          if (user.departmentId) {
+            queryBuilder.andWhere('resource.departmentId = :userDepartmentId', { 
+              userDepartmentId: user.departmentId 
+            });
+          }
+          break;
+        case UserRole.VIEWER:
+          // Viewer has limited access - may implement additional restrictions
+          break;
+        case UserRole.ADMIN:
+        case UserRole.RA_ALL:
+        default:
+          // No restrictions for admin and RA_ALL
+          break;
+      }
+    }
+
+    // Apply search term filter (search in name, employee code, skills)
+    if (searchTerm) {
+      queryBuilder.andWhere(
+        '(LOWER(resource.fullName) LIKE LOWER(:searchTerm) OR ' +
+        'LOWER(resource.employeeCode) LIKE LOWER(:searchTerm) OR ' +
+        'LOWER(resource.skillSet) LIKE LOWER(:searchTerm))',
+        { searchTerm: `%${searchTerm}%` }
+      );
+    }
+
+    // Apply department filter
+    if (departmentId) {
+      queryBuilder.andWhere('resource.departmentId = :departmentId', { departmentId });
+    }
+
+    // Apply status filter
+    if (status) {
+      queryBuilder.andWhere('resource.status = :status', { status });
+    }
+
+    // Apply position filter
+    if (position) {
+      queryBuilder.andWhere('LOWER(resource.position) LIKE LOWER(:position)', {
+        position: `%${position}%`
+      });
+    }
+
+    // Apply date range filters
+    if (idleFromStart) {
+      queryBuilder.andWhere('resource.idleFrom >= :idleFromStart', { 
+        idleFromStart: new Date(idleFromStart) 
+      });
+    }
+    if (idleFromEnd) {
+      queryBuilder.andWhere('resource.idleFrom <= :idleFromEnd', { 
+        idleFromEnd: new Date(idleFromEnd) 
+      });
+    }
+
+    // Apply urgent filter (idle >= 2 months)
+    if (urgentOnly) {
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      queryBuilder.andWhere('resource.idleFrom <= :twoMonthsAgo', { twoMonthsAgo });
+    }
+
+    // Apply skills filter
+    if (skills && skills.length > 0) {
+      const skillConditions = skills.map((_, index) => 
+        `LOWER(resource.skillSet) LIKE LOWER(:skill${index})`
+      ).join(' OR ');
+      
+      const skillParams = skills.reduce((params, skill, index) => {
+        params[`skill${index}`] = `%${skill}%`;
+        return params;
+      }, {} as Record<string, string>);
+
+      queryBuilder.andWhere(`(${skillConditions})`, skillParams);
+    }
+
+    // Apply sorting
+    const validSortFields = [
+      'employeeCode', 'fullName', 'position', 'idleFrom', 'idleTo', 
+      'status', 'rate', 'createdAt', 'updatedAt'
+    ];
     
-    throw new Error('Method not implemented - findAllWithPagination');
+    if (validSortFields.includes(sortBy)) {
+      queryBuilder.orderBy(`resource.${sortBy}`, sortOrder);
+    } else {
+      queryBuilder.orderBy('resource.updatedAt', 'DESC');
+    }
+
+    // Calculate total count for pagination
+    const total = await queryBuilder.getCount();
+
+    // Apply pagination
+    const offset = (page - 1) * limit;
+    queryBuilder.skip(offset).take(limit);
+
+    // Execute query
+    const resources = await queryBuilder.getMany();
+
+    // Transform to response DTOs
+    const data = resources.map(resource => new IdleResourceResponseDto(resource));
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / limit);
+    const hasNext = page < totalPages;
+    const hasPrev = page > 1;
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNext,
+      hasPrev
+    };
   }
 
   async searchResources(searchCriteria: SearchCriteriaDto): Promise<IdleResourceResponseDto[]> {

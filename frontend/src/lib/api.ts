@@ -114,6 +114,68 @@ export const dashboardApi = {
 
 // Idle Resources API
 export const idleResourcesApi = {
+  getAllWithPagination: async (filters?: {
+    searchTerm?: string;
+    departmentId?: number;
+    status?: string;
+    position?: string;
+    idleFromStart?: string;
+    idleFromEnd?: string;
+    urgentOnly?: boolean;
+    skills?: string[];
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'ASC' | 'DESC';
+  }) => {
+    const params = new URLSearchParams();
+    
+    if (filters?.searchTerm) params.append('searchTerm', filters.searchTerm);
+    if (filters?.departmentId) params.append('departmentId', filters.departmentId.toString());
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.position) params.append('position', filters.position);
+    if (filters?.idleFromStart) params.append('idleFromStart', filters.idleFromStart);
+    if (filters?.idleFromEnd) params.append('idleFromEnd', filters.idleFromEnd);
+    if (filters?.urgentOnly) params.append('urgentOnly', filters.urgentOnly.toString());
+    if (filters?.skills && filters.skills.length > 0) {
+      filters.skills.forEach(skill => params.append('skills[]', skill));
+    }
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
+    
+    const response = await api.get(`/idle-resources?${params.toString()}`);
+    return response.data;
+  },
+
+  search: async (filters: {
+    searchTerm?: string;
+    departmentId?: number;
+    status?: string;
+    position?: string;
+    idleFromStart?: string;
+    idleFromEnd?: string;
+    urgentOnly?: boolean;
+    skills?: string[];
+  }) => {
+    const params = new URLSearchParams();
+    
+    if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
+    if (filters.departmentId) params.append('departmentId', filters.departmentId.toString());
+    if (filters.status) params.append('status', filters.status);
+    if (filters.position) params.append('position', filters.position);
+    if (filters.idleFromStart) params.append('idleFromStart', filters.idleFromStart);
+    if (filters.idleFromEnd) params.append('idleFromEnd', filters.idleFromEnd);
+    if (filters.urgentOnly) params.append('urgentOnly', filters.urgentOnly.toString());
+    if (filters.skills && filters.skills.length > 0) {
+      filters.skills.forEach(skill => params.append('skills[]', skill));
+    }
+    
+    const response = await api.get(`/idle-resources/search?${params.toString()}`);
+    return response.data;
+  },
+
   getAll: async () => {
     const response = await api.get('/idle-resources');
     return response.data;
@@ -136,6 +198,38 @@ export const idleResourcesApi = {
 
   delete: async (id: number) => {
     const response = await api.delete(`/idle-resources/${id}`);
+    return response.data;
+  },
+
+  batchDelete: async (ids: number[]) => {
+    const response = await api.delete('/idle-resources/batch', { data: { ids } });
+    return response.data;
+  },
+
+  exportData: async (filters?: any, format: 'excel' | 'csv' = 'excel') => {
+    const params = new URLSearchParams();
+    
+    if (filters?.searchTerm) params.append('searchTerm', filters.searchTerm);
+    if (filters?.departmentId) params.append('departmentId', filters.departmentId.toString());
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.urgentOnly) params.append('urgentOnly', filters.urgentOnly.toString());
+    params.append('format', format);
+    
+    const response = await api.get(`/idle-resources/export?${params.toString()}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  importData: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post('/idle-resources/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };

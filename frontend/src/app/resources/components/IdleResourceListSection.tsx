@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { Box, Card, CardContent, Typography, Alert } from '@mui/material';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Box, Card, CardContent, Typography, Alert, CircularProgress } from '@mui/material';
 import { ResourceFilters } from './ResourceFilters';
 import { ResourceActions } from './ResourceActions';
 import { ResourceDataGrid } from './ResourceDataGrid';
-import { ResourceStatus } from '@/lib/types';
+import { ResourceStatus, IdleResourceResponse, PaginatedResponse, SearchCriteria } from '@/lib/types';
+import { idleResourcesApi } from '@/lib/api';
 
 interface FilterState {
   searchTerm: string;
@@ -22,100 +23,6 @@ interface FilterState {
 }
 
 export function IdleResourceListSection() {
-  // Mock data for UI display
-  const mockResources = [
-    {
-      id: 1,
-      employeeCode: 'EMP001',
-      fullName: 'Nguyen Van A',
-      department: { id: 1, name: 'Information Technology', code: 'IT' },
-      position: 'Senior Developer',
-      email: 'nguyen.van.a@company.com',
-      skillSet: 'Java, Spring Boot, React, MySQL',
-      idleFrom: '2024-01-15',
-      idleTo: undefined,
-      status: ResourceStatus.IDLE,
-      rate: 50,
-      processNote: 'Available for new projects',
-      isUrgent: true,
-      cvFilesCount: 2,
-      createdAt: '2024-01-15T08:00:00Z',
-      updatedAt: '2024-01-20T10:30:00Z',
-    },
-    {
-      id: 2,
-      employeeCode: 'EMP002',
-      fullName: 'Tran Thi B',
-      department: { id: 2, name: 'Human Resources', code: 'HR' },
-      position: 'Business Analyst',
-      email: 'tran.thi.b@company.com',
-      skillSet: 'Business Analysis, Requirement Gathering, Jira',
-      idleFrom: '2024-02-20',
-      idleTo: undefined,
-      status: ResourceStatus.IDLE,
-      rate: 40,
-      processNote: undefined,
-      isUrgent: false,
-      cvFilesCount: 1,
-      createdAt: '2024-02-20T09:15:00Z',
-      updatedAt: '2024-02-25T14:45:00Z',
-    },
-    {
-      id: 3,
-      employeeCode: 'EMP003',
-      fullName: 'Le Van C',
-      department: { id: 1, name: 'Information Technology', code: 'IT' },
-      position: 'QA Engineer',
-      email: 'le.van.c@company.com',
-      skillSet: 'Manual Testing, Automation Testing, Selenium',
-      idleFrom: '2024-03-10',
-      idleTo: undefined,
-      status: ResourceStatus.PROCESSING,
-      rate: 35,
-      processNote: 'Interview scheduled',
-      isUrgent: false,
-      cvFilesCount: 1,
-      createdAt: '2024-03-10T11:20:00Z',
-      updatedAt: '2024-03-15T16:10:00Z',
-    },
-    {
-      id: 4,
-      employeeCode: 'EMP004',
-      fullName: 'Pham Thi D',
-      department: { id: 3, name: 'Marketing', code: 'MKT' },
-      position: 'UI/UX Designer',
-      email: 'pham.thi.d@company.com',
-      skillSet: 'Figma, Adobe XD, Photoshop, User Research',
-      idleFrom: '2023-11-05',
-      idleTo: undefined,
-      status: ResourceStatus.IDLE,
-      rate: 45,
-      processNote: 'Long-term idle',
-      isUrgent: true,
-      cvFilesCount: 3,
-      createdAt: '2023-11-05T13:30:00Z',
-      updatedAt: '2024-01-10T09:25:00Z',
-    },
-    {
-      id: 5,
-      employeeCode: 'EMP005',
-      fullName: 'Hoang Van E',
-      department: { id: 1, name: 'Information Technology', code: 'IT' },
-      position: 'Project Manager',
-      email: 'hoang.van.e@company.com',
-      skillSet: 'Agile, Scrum, Project Management, Leadership',
-      idleFrom: '2024-01-25',
-      idleTo: undefined,
-      status: ResourceStatus.ASSIGNED,
-      rate: 60,
-      processNote: 'Assigned to Project Alpha',
-      isUrgent: false,
-      cvFilesCount: 0,
-      createdAt: '2024-01-25T07:45:00Z',
-      updatedAt: '2024-02-01T12:15:00Z',
-    }
-  ];
-
   const [filters, setFilters] = useState<FilterState>({
     searchTerm: '',
     departmentId: '',
@@ -132,6 +39,8 @@ export function IdleResourceListSection() {
 
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resourceData, setResourceData] = useState<PaginatedResponse<IdleResourceResponse> | null>(null);
   const [visibleColumns] = useState([
     'employeeCode',
     'fullName', 
@@ -145,28 +54,56 @@ export function IdleResourceListSection() {
     'isUrgent'
   ]);
 
-  // Event Handlers with TODO comments for business logic implementation
-  const handleFiltersChange = useCallback((newFilters: any) => {
-    // TODO: Apply filters to API query
-    // TODO: Reset pagination to first page
-    // TODO: Update URL query parameters
-    // TODO: Call backend API with filter parameters
-    console.log('Applying filters:', newFilters);
-    setFilters(prev => ({ ...prev, ...newFilters, page: 0 }));
+  // Load data from API
+  const loadData = useCallback(async (searchCriteria?: SearchCriteria) => {
     setLoading(true);
+    setError(null);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const criteria: SearchCriteria = {
+        searchTerm: filters.searchTerm || undefined,
+        departmentId: filters.departmentId ? parseInt(filters.departmentId) : undefined,
+        status: filters.status || undefined,
+        position: filters.position || undefined,
+        idleFromStart: filters.idleFromStart || undefined,
+        idleFromEnd: filters.idleFromEnd || undefined,
+        urgentOnly: filters.urgentOnly || undefined,
+        page: (filters.page + 1), // Convert from 0-based to 1-based
+        limit: filters.rowsPerPage,
+        sortBy: filters.sortField,
+        sortOrder: filters.sortDirection === 'asc' ? 'ASC' : 'DESC',
+        ...searchCriteria
+      };
+
+      const response = await idleResourcesApi.getAllWithPagination(criteria);
+      setResourceData(response);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load resources');
+      console.error('Failed to load resources:', err);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
+  }, [filters]);
+
+  // Load data on component mount and when filters change
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Event Handlers with real API integration
+  const handleFiltersChange = useCallback((newFilters: any) => {
+    console.log('Applying filters:', newFilters);
+    setFilters(prev => ({ 
+      ...prev, 
+      ...newFilters, 
+      page: 0 // Reset to first page when filters change
+    }));
+    setSelectedRows([]); // Clear selections when filters change
   }, []);
 
   const handleClearFilters = useCallback(() => {
-    // TODO: Reset all filters to default values
-    // TODO: Clear URL query parameters
-    // TODO: Reload data with default parameters
     console.log('Clearing all filters');
-    setFilters({
+    const defaultFilters = {
       searchTerm: '',
       departmentId: '',
       status: '',
@@ -177,20 +114,16 @@ export function IdleResourceListSection() {
       page: 0,
       rowsPerPage: 10,
       sortField: 'updatedAt',
-      sortDirection: 'desc'
-    });
+      sortDirection: 'desc' as const
+    };
+    setFilters(defaultFilters);
+    setSelectedRows([]);
   }, []);
 
   const handleRefresh = useCallback(() => {
-    // TODO: Reload data from API
-    // TODO: Maintain current filters and pagination
-    // TODO: Show refresh loading state
     console.log('Refreshing data');
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const handleAddNew = useCallback(() => {
     // TODO: Navigate to create new resource page
@@ -235,28 +168,30 @@ export function IdleResourceListSection() {
   }, []);
 
   const handlePageChange = useCallback((event: unknown, newPage: number) => {
-    // TODO: Update pagination state
-    // TODO: Call API with new page parameters
-    // TODO: Maintain current filters and sorting
     console.log('Page changed to:', newPage);
     setFilters(prev => ({ ...prev, page: newPage }));
+    setSelectedRows([]); // Clear selections when page changes
   }, []);
 
   const handleRowsPerPageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    // TODO: Update page size state
-    // TODO: Reset to first page
-    // TODO: Call API with new page size
     const newRowsPerPage = parseInt(event.target.value, 10);
     console.log('Rows per page changed to:', newRowsPerPage);
-    setFilters(prev => ({ ...prev, rowsPerPage: newRowsPerPage, page: 0 }));
+    setFilters(prev => ({ 
+      ...prev, 
+      rowsPerPage: newRowsPerPage, 
+      page: 0 // Reset to first page when page size changes
+    }));
+    setSelectedRows([]);
   }, []);
 
   const handleSortChange = useCallback((field: string, direction: 'asc' | 'desc') => {
-    // TODO: Update sort state
-    // TODO: Call API with new sort parameters
-    // TODO: Maintain current filters and pagination
     console.log('Sort changed:', field, direction);
-    setFilters(prev => ({ ...prev, sortField: field, sortDirection: direction }));
+    setFilters(prev => ({ 
+      ...prev, 
+      sortField: field, 
+      sortDirection: direction 
+    }));
+    setSelectedRows([]);
   }, []);
 
   const handleRowSelectionChange = useCallback((selectedIds: number[]) => {
@@ -297,42 +232,6 @@ export function IdleResourceListSection() {
     console.log('Download CV for resource:', id);
   }, []);
 
-  // Apply filters to mock data for UI demonstration
-  const filteredData = React.useMemo(() => {
-    let filtered = [...mockResources];
-    
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(resource => 
-        resource.fullName.toLowerCase().includes(searchLower) ||
-        resource.employeeCode.toLowerCase().includes(searchLower) ||
-        resource.skillSet?.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    if (filters.departmentId) {
-      filtered = filtered.filter(resource => 
-        resource.department.id.toString() === filters.departmentId
-      );
-    }
-    
-    if (filters.status) {
-      filtered = filtered.filter(resource => resource.status === filters.status);
-    }
-    
-    if (filters.urgentOnly) {
-      filtered = filtered.filter(resource => resource.isUrgent);
-    }
-    
-    return filtered;
-  }, [filters]);
-
-  const totalCount = filteredData.length;
-  const paginatedData = filteredData.slice(
-    filters.page * filters.rowsPerPage,
-    (filters.page + 1) * filters.rowsPerPage
-  );
-
   return (
     <Box className="space-y-4">
       {/* Filters Section */}
@@ -354,45 +253,73 @@ export function IdleResourceListSection() {
         isLoading={loading}
       />
 
+      {/* Error Display */}
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
       {/* Data Grid Section */}
       <Card>
         <CardContent className="p-0">
           {/* Header */}
           <Box className="p-4 border-b border-gray-200">
             <Typography variant="h6" className="text-gray-700 font-semibold">
-              Idle Resources ({totalCount} total)
+              Idle Resources ({resourceData?.total || 0} total)
             </Typography>
             <Typography variant="body2" className="text-gray-600">
               {selectedRows.length > 0 && `${selectedRows.length} selected • `}
-              Showing {paginatedData.length} of {totalCount} resources
+              Showing {resourceData?.data?.length || 0} of {resourceData?.total || 0} resources
             </Typography>
           </Box>
 
           {/* Alert for urgent resources */}
-          {filteredData.some(r => r.isUrgent) && (
+          {resourceData?.data && resourceData.data.some(r => r.isUrgent) && (
             <Alert severity="warning" className="m-4">
-              {filteredData.filter(r => r.isUrgent).length} resource(s) have been idle for 2+ months and require attention.
+              {resourceData.data.filter(r => r.isUrgent).length} resource(s) have been idle for 2+ months and require attention.
             </Alert>
           )}
 
+          {/* Loading State */}
+          {loading && (
+            <Box className="flex justify-center items-center p-8">
+              <CircularProgress />
+            </Box>
+          )}
+
           {/* Data Grid */}
-          <ResourceDataGrid
-            data={paginatedData}
-            loading={loading}
-            totalCount={totalCount}
-            page={filters.page}
-            rowsPerPage={filters.rowsPerPage}
-            onPageChange={handlePageChange}
-            onRowsPerPageChange={handleRowsPerPageChange}
-            onSortChange={handleSortChange}
-            onRowSelectionChange={handleRowSelectionChange}
-            onRowEdit={handleRowEdit}
-            onRowDelete={handleRowDelete}
-            onRowView={handleRowView}
-            onCVDownload={handleCVDownload}
-            selectedRows={selectedRows}
-            visibleColumns={visibleColumns}
-          />
+          {!loading && resourceData && resourceData.data.length > 0 && (
+            <ResourceDataGrid
+              data={resourceData.data}
+              loading={loading}
+              totalCount={resourceData.total}
+              page={filters.page}
+              rowsPerPage={filters.rowsPerPage}
+              onPageChange={handlePageChange}
+              onRowsPerPageChange={handleRowsPerPageChange}
+              onSortChange={handleSortChange}
+              onRowSelectionChange={handleRowSelectionChange}
+              onRowEdit={handleRowEdit}
+              onRowDelete={handleRowDelete}
+              onRowView={handleRowView}
+              onCVDownload={handleCVDownload}
+              selectedRows={selectedRows}
+              visibleColumns={visibleColumns}
+            />
+          )}
+
+          {/* Empty State */}
+          {!loading && resourceData && resourceData.data.length === 0 && (
+            <Box className="flex flex-col items-center justify-center p-8 text-gray-500">
+              <Typography variant="h6" className="mb-2">
+                No resources found
+              </Typography>
+              <Typography variant="body2">
+                Try adjusting your filters or search criteria
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
     </Box>

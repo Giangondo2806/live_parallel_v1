@@ -58,8 +58,11 @@ export class IdleResourcesController {
   @ApiQuery({ name: 'urgentOnly', required: false, description: 'Show only urgent resources (idle >= 2 months)' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number for pagination' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
-  async findAll(@Query() searchCriteria: SearchCriteriaDto): Promise<PaginatedIdleResourceResponseDto> {
-    return this.idleResourcesService.findAllWithPagination(searchCriteria);
+  async findAll(
+    @Query() searchCriteria: SearchCriteriaDto,
+    @CurrentUser() user: User
+  ): Promise<PaginatedIdleResourceResponseDto> {
+    return this.idleResourcesService.findAllWithPagination(searchCriteria, user);
   }
 
   @Get('search')

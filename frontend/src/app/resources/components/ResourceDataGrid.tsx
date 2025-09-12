@@ -34,33 +34,10 @@ import {
   Visibility,
   FilePresent
 } from '@mui/icons-material';
-import { ResourceStatus } from '@/lib/types';
-
-interface IdleResource {
-  id: number;
-  employeeCode: string;
-  fullName: string;
-  department: {
-    id: number;
-    name: string;
-    code: string;
-  };
-  position: string;
-  email?: string;
-  skillSet?: string;
-  idleFrom: string;
-  idleTo?: string;
-  status: ResourceStatus;
-  rate?: number;
-  processNote?: string;
-  isUrgent: boolean;
-  cvFilesCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
+import { ResourceStatus, IdleResourceResponse } from '@/lib/types';
 
 interface ResourceDataGridProps {
-  data: IdleResource[];
+  data: IdleResourceResponse[];
   loading: boolean;
   totalCount: number;
   page: number;
@@ -172,18 +149,19 @@ export function ResourceDataGrid({
     onSortChange(field, newDirection);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
     });
   };
 
-  const getIdleDuration = (idleFromString: string) => {
-    const idleFrom = new Date(idleFromString);
+  const getIdleDuration = (idleFrom: Date | string) => {
+    const startDate = typeof idleFrom === 'string' ? new Date(idleFrom) : idleFrom;
     const now = new Date();
-    const diffInMonths = Math.floor((now.getTime() - idleFrom.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    const diffInMonths = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
     return `${diffInMonths} month${diffInMonths !== 1 ? 's' : ''}`;
   };
 
@@ -217,7 +195,7 @@ export function ResourceDataGrid({
     );
   };
 
-  const renderStatusChip = (status: ResourceStatus) => {
+  const renderStatusChip = (status: string | ResourceStatus) => {
     const statusColors = {
       [ResourceStatus.IDLE]: 'warning',
       [ResourceStatus.ASSIGNED]: 'success',
@@ -228,7 +206,7 @@ export function ResourceDataGrid({
     return (
       <Chip
         label={status.toUpperCase()}
-        color={statusColors[status] || 'default'}
+        color={statusColors[status as ResourceStatus] || 'default'}
         size="small"
       />
     );
