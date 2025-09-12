@@ -43,6 +43,95 @@
   border-left: 4px solid #FFC107;
 }
 
+/* Dashboard specific styles */
+.dashboard-stat-card {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.dashboard-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-chart-container {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  min-height: 300px;
+}
+
+.dashboard-activity-item {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.dashboard-activity-item:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-left-color: #1A73E8;
+}
+
+.dashboard-department-bar {
+  height: 8px;
+  background: linear-gradient(90deg, #FF9800 0%, #F57C00 100%);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.dashboard-loading-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.dashboard-alert-urgent {
+  background: linear-gradient(135deg, #FFE0B2 0%, #FFCC80 100%);
+  border-left: 4px solid #FF9800;
+  border-radius: 0.5rem;
+}
+
+.dashboard-quick-action-button {
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.dashboard-quick-action-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 :root {
   --background: #F8F9FA;
   --foreground: #171717;
